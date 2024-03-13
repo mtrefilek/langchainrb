@@ -13,5 +13,13 @@ module Langchain::LLM
     def prompt_tokens
       raw_response.dig("inputTextTokenCount")
     end
+
+    def completions
+      raw_response.dig("results")
+    end
+
+    def completion
+      completions&.dig(0, "outputText")
+    end
   end
 end

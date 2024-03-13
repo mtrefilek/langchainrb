@@ -46,7 +46,7 @@ module Langchain::LLM
       }
     }.freeze
 
-    SUPPORTED_COMPLETION_PROVIDERS = %i[anthropic cohere ai21].freeze
+    SUPPORTED_COMPLETION_PROVIDERS = %i[anthropic cohere ai21 amazon].freeze
     SUPPORTED_EMBEDDING_PROVIDERS = %i[amazon].freeze
 
     def initialize(completion_model: DEFAULTS[:completion_model_name], embedding_model: DEFAULTS[:embedding_model_name], aws_client_options: {}, default_options: {})
@@ -93,7 +93,8 @@ module Langchain::LLM
 
       parameters = compose_parameters params
 
-      parameters[:prompt] = wrap_prompt prompt
+      parameters[:prompt] = wrap_prompt prompt unless completion_provider == :amazon
+      parameters[:inputText] = wrap_prompt prompt if completion_provider == :amazon
 
       response = client.invoke_model({
         model_id: @defaults[:completion_model_name],
@@ -130,6 +131,8 @@ module Langchain::LLM
         :max_tokens
       elsif completion_provider == :ai21
         :maxTokens
+      elsif completion_provider == :amazon
+        :maxTokenCount
       end
     end
 
@@ -140,6 +143,8 @@ module Langchain::LLM
         compose_parameters_cohere params
       elsif completion_provider == :ai21
         compose_parameters_ai21 params
+      elsif completion_provider == :amazon
+        compose_parameters_amazon params
       end
     end
 
@@ -150,6 +155,8 @@ module Langchain::LLM
         Langchain::LLM::CohereResponse.new(JSON.parse(response.body.string))
       elsif completion_provider == :ai21
         Langchain::LLM::AI21Response.new(JSON.parse(response.body.string, symbolize_names: true))
+      elsif completion_provider == :amazon
+        Langchain::LLM::AwsTitanResponse.new(JSON.parse(response.body.string))
       end
     end
 
@@ -209,6 +216,19 @@ module Langchain::LLM
           applyToNumbers: default_params[:frequency_penalty][:apply_to_numbers],
           applyToStopwords: default_params[:frequency_penalty][:apply_to_stopwords],
           applyToEmojis: default_params[:frequency_penalty][:apply_to_emojis]
+        }
+      }
+    end
+
+    def compose_parameters_amazon(params)
+      default_params = @defaults.merge(params)
+
+      {
+        textGenerationConfig: {
+          maxTokenCount: default_params[:max_tokens_to_sample],
+          temperature: default_params[:temperature],
+          topP: default_params[:top_p],
+          stopSequences: default_params[:stop_sequences],
         }
       }
     end
